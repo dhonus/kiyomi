@@ -1,6 +1,15 @@
 [package]
-name = "keyi"
+name = "kiyomi"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+dirs = "5.0.1"
+epub-builder = "0.7.4"
+infer = "0.16.0"
+lettre = "0.11.11"
+mime = "0.3.17"
+notify = "7.0.0"
+quick-xml = "0.37.1"
+toml = "0.8.19"
+zip = "2.2.2"
