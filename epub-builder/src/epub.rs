@@ -620,6 +620,43 @@ impl<Z: Zip> EpubBuilder<Z> {
             ));
         }
 
+        optional.push(format!(
+            "<meta name=\"fixed-layout\" content=\"true\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"original-resolution\" content=\"1072x1448\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"book-type\" content=\"comic\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"primary-writing-mode\" content=\"horizontal-rl\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"zero-gutter\" content=\"true\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"zero-margin\" content=\"true\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"ke-border-color\" content=\"#FFFFFF\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"ke-border-width\" content=\"0\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"rendition:spread\" content=\"landscape\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"rendition:layout\" content=\"pre-paginated\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"orientation-lock\" content=\"none\"/>"
+        ));
+        optional.push(format!(
+            "<meta name=\"region-mag\" content=\"true\"/>"
+        ));
+
         let date_modified = self
             .metadata
             .date_modified

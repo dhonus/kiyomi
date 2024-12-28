@@ -129,12 +129,11 @@ pub fn build_epub_from_images(
         )?;
     }
 
-     for (_, image_file) in images.iter().enumerate() {
+    for (_, image_file) in images.iter().enumerate() {
         println!("+ adding image: {}", image_file.file_name);
         let image_path = format!("images/{}", image_file.file_name);
         epub.add_resource(&image_path, &image_file.contents[..], &image_file.mime_type)?;
-
-     }
+    }
 
     // Write out the EPUB
     epub.generate(&mut output)?;

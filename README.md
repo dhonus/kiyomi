@@ -1,6 +1,6 @@
 # kiyomi
 
-When you download manga using suwayomi, kiyomi automatically sends it to your kindle. It does this by watching your manga directory for new .cbz files, converting them to .epub and emailing them to your kindle.
+When you download manga using suwayomi, kiyomi automatically sends it to your kindle. It does this by watching your manga directory for new .cbz files, converting them to .epub and emailing them to your kindle. The generated manga is right-to-left, correctly tagged, passes epubcheck and is actually full screen on my paperwhite (no text mode margins).
 
 ## What you need
 - A kindle
