@@ -25,3 +25,6 @@ Kiyomi will create a config file and print its location. Edit this file to confi
 - There are no resend checks on purpose. If the send fails, you will get an email from amazon. Delete and download a manga again to resend.
 - Kiyomi will not delete the .cbz files after sending them. You can delete them manually or configure suwayomi to delete them after downloading.
 - Manga that exists in the manga directory before kiyomi starts will not be sent. Only those that are downloaded while kiyomi is running will be sent.
+
+## Showcase
+[showcase.webm](https://github.com/user-attachments/assets/cf52818d-f6e3-490d-925d-6b2fb9afa4e8)
