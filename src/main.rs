@@ -69,7 +69,6 @@ fn main() -> Result<()> {
 /// Files were created! Let's check if they're .cbz files. If they are, we'll process them.
 fn created_files(paths: Vec<std::path::PathBuf>) -> () {
     for path in paths {
-        println!("+ created {:?}", path);
         if !path.is_file() {
             continue;
         }
@@ -82,9 +81,9 @@ fn created_files(paths: Vec<std::path::PathBuf>) -> () {
                 continue;
             }
         };
-
+        
         if let Some(_) = log_filename(filename) {
-            println!("- created {:?}", filename);
+            println!("+ created {:?}", path);
             if let Err(e) = manga(filename) {
                 eprintln!("manga error: {:?}", e);
             }
