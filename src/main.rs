@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     }
 
     let watcher_config = notify::Config::default()
-        .with_poll_interval(std::time::Duration::from_secs(1))
+        .with_poll_interval(std::time::Duration::from_secs(30))
         .with_compare_contents(true);
 
     let mut watcher = PollWatcher::new(tx, watcher_config)?;
@@ -62,7 +62,7 @@ fn main() -> Result<()> {
         }
     }
 
-    
+
     Ok(())
 }
 
@@ -81,7 +81,7 @@ fn created_files(paths: Vec<std::path::PathBuf>) -> () {
                 continue;
             }
         };
-        
+
         if let Some(_) = log_filename(filename) {
             println!("+ created {:?}", path);
             if let Err(e) = manga(filename) {
@@ -94,7 +94,7 @@ fn created_files(paths: Vec<std::path::PathBuf>) -> () {
 /// We found a cbz manga. Let's deal with it.
 fn manga(file_path: &str) -> Result<()> {
     let path = Path::new(file_path); // .cbz absolute path
-    
+
     // some sources don't provide nicely tagged files. In this case, we at least want the manga title
     let fallback_title = match path.parent() {
         Some(p) => {
