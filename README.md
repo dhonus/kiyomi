@@ -18,8 +18,34 @@ Clone and run `cargo run --release` to start the program. Kiyomi will create a c
 
 After kiyomi is running, download manga using suwayomi. Kiyomi will automagically send your manga to your kindle. Read the logs for more information.
 
+## Manga title format
+
+1. If a split happened (too large to send in one email), the title will begin `N-M` where N is the current part and M is the total number of parts.
+2. Following that, the title will be `Chapter name - Manga Title`.
+
 ## Configuration
 Kiyomi will create a config file and print its location. Edit this file to configure.
+### Example config
+```toml
+[smtp]
+# SMTP server with port
+server = "smtp.gmail.com"
+username = "you@gmail.com"
+password = "yourpassword"
+from_email = "you@gmail.com"
+to_email = "yourkindle_xxxxxx@kindle.com"
+subject = "kiyomi"
+
+[directories]
+manga = "/home/you/manga"
+
+[options]
+# Set to true to delete the .cbz files after sending
+delete = true
+# Size in MB to split the manga into multiple emails if too large to send
+# 25MB is the default if not set
+size_limit = 25
+```
 
 ## Notes
 - There are no resend checks on purpose. If the send fails, you will get an email from amazon. Delete and download a manga again to resend.

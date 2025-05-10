@@ -22,6 +22,8 @@ to_email = ""
 subject = "Manga"
 [directories]
 # manga = "/path/to/your/manga"
+[options]
+delete = false
         "#;
 
         match std::fs::write(&config_path, default_config) {

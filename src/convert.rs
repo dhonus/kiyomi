@@ -14,7 +14,7 @@ pub struct ImageFile {
 }
 
 /// represents a 'ComicInfo.xml' file
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ComicInfo {
     pub title: Option<String>,
     pub writer: Option<String>,
@@ -28,7 +28,7 @@ pub fn extract_images_from_cbz<P: AsRef<Path>>(cbz_path: P) -> io::Result<(Vec<I
 
     println!("- reading cbz file");
     let mut archive = ZipArchive::new(BufReader::new(file))?;
-    println!("+ cbz file opened");
+    println!("- cbz file opened");
 
     let mut image_files = Vec::new();
 
@@ -69,10 +69,12 @@ pub fn extract_images_from_cbz<P: AsRef<Path>>(cbz_path: P) -> io::Result<(Vec<I
 }
 
 pub fn build_epub_from_images(
-    manga: (Vec<ImageFile>, Option<ComicInfo>),
+    manga: (&Vec<&ImageFile>, Option<ComicInfo>),
+    cover_image: Option<&ImageFile>,
     fallback_title: &str,
     output_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+    file_of: Option<(usize, usize)>,
+) -> Result<String, Box<dyn std::error::Error>> {
 
     let (images, comic_info) = manga;
 
@@ -80,19 +82,23 @@ pub fn build_epub_from_images(
     epub.epub_version(EpubVersion::V30);
     
     // the first image is always the cover
-    if let Some(cover) = images.first() {
-        epub.add_cover_image(&cover.file_name, &cover.contents[..], &cover.mime_type)?;
+    if let Some(cover_image) = cover_image {
+        epub.add_cover_image(&cover_image.file_name, &cover_image.contents[..], &cover_image.mime_type)?;
     }
 
     let mut title = String::from(comic_info.as_ref().and_then(|ci| ci.title.as_deref()).unwrap_or(fallback_title));
     if let Some(series) = comic_info.as_ref().and_then(|ci| ci.series.as_deref()) {
-        title = format!("{} - {}", series, title);
+        title = format!("{} - {}", title, series);
+    }
+    if let Some((file_n, of)) = file_of {
+        title = format!("{}-{} {}", file_n + 1, of, title);
     }
     epub.metadata("title", &title)?;
     epub.metadata("author", comic_info.as_ref().and_then(|ci| ci.writer.as_deref()).unwrap_or("Unknown"))?;
 
     // output file! In the future there may be more than 1. We need to be under 50MB
-    let mut output = File::create(format!("{}/{}.epub", output_path, title))?;
+    let output_path = format!("{}/{}.epub", output_path, title);
+    let mut output = File::create(&output_path)?;
 
     for (i, image_file) in images.iter().enumerate() {
         let image_path = format!("images/{}", image_file.file_name);
@@ -138,8 +144,9 @@ pub fn build_epub_from_images(
     // Write out the EPUB
     epub.generate(&mut output)?;
 
-    println!("- epub created: {}", output_path);
-    Ok(())
+    println!("- epub created at {} with {} pages", output_path, images.len());
+
+    Ok(output_path)
 }
 
 pub fn parse_comicinfo(xml_bytes: &[u8]) -> ComicInfo {
