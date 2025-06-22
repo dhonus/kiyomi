@@ -35,6 +35,7 @@ password = "yourpassword"
 from_email = "you@gmail.com"
 to_email = "yourkindle_xxxxxx@kindle.com"
 subject = "kiyomi"
+# port = 587 # optional, defaults to 587 for TLS
 
 [directories]
 manga = "/home/you/manga"

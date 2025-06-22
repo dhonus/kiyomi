@@ -231,6 +231,7 @@ fn manga(file_path: &str) -> Result<()> {
         ) {
             Ok(path) => {
                 match email::send_epub(
+                    kiyomi_config["smtp"]["port"].as_integer(),
                     kiyomi_config["smtp"]["server"].as_str().unwrap(),
                     kiyomi_config["smtp"]["username"].as_str().unwrap(),
                     kiyomi_config["smtp"]["password"].as_str().unwrap(),
