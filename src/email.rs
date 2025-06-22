@@ -6,48 +6,8 @@ use std::error::Error;
 use std::fs;
 
 /// Sends an EPUB file as an email attachment.
-pub fn send_epubs_via_email(
-    smtp_server: &str,
-    smtp_username: &str,
-    smtp_password: &str,
-    from_email: &str,
-    to_email: &str,
-    subject: &str,
-    epubs_path: &str, // all the epubs are in this directory
-) -> Result<(), Box<dyn Error>> {
-
-    // get all files in epub_path
-    let epub_files = fs::read_dir(epubs_path)?
-        .filter_map(|entry| {
-            entry.ok().and_then(|e| {
-                if e.path().is_file() {
-                    Some(e.path())
-                } else {
-                    None
-                }
-            })
-        })
-        .collect::<Vec<_>>();
-
-    for epub_file in epub_files {
-        let epub_file = epub_file.as_path();
-        let path = match epub_file.to_str() {
-            Some(p) => p,
-            None => {
-                eprintln!("Could not convert path to string: {:?}", epub_file);
-                continue;
-            }
-        };
-
-        send_epub(
-            smtp_server, smtp_username, smtp_password, from_email, to_email, subject, path
-        )?;
-    }
-    Ok(())
-}
-
-/// Sends an EPUB file as an email attachment.
-fn send_epub(
+pub fn send_epub(
+    port: Option<i64>, // optional port, default is 587 for TLS
     smtp_server: &str,
     smtp_username: &str,
     smtp_password: &str,
@@ -55,8 +15,8 @@ fn send_epub(
     to_email: &str,
     subject: &str,
     epub_path: &str, // all the epubs are in this directory
-) -> Result<(), Box<dyn Error>> {   
-     
+) -> Result<(), Box<dyn Error>> {
+
     // get the file
     let epub_bytes = fs::read(epub_path)?;
     let epub_filename = epub_path
@@ -88,9 +48,19 @@ fn send_epub(
     //  - for local/insecure servers adapt accordingly ?
     let creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
 
-    let mailer = SmtpTransport::relay(smtp_server)?
-        .credentials(creds)
-        .build();
+    let mailer = match port {
+        Some(p) => {
+            SmtpTransport::relay(smtp_server)?
+                .port(p as u16)
+                .credentials(creds)
+                .build()
+        }
+        None => {
+            SmtpTransport::relay(smtp_server)?
+                .credentials(creds)
+                .build()
+        }
+    };
 
     match mailer.send(&email) {
         Ok(_) => {

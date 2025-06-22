@@ -12,9 +12,15 @@ fn main() -> Result<()> {
     let (tx, rx) = mpsc::channel::<Result<Event>>();
 
     println!("kiyomi - .cbz file watcher for kindle");
-    if let Some(dir) = dirs::cache_dir() {
-        println!("- your cache file is located here: {:?}", dir.join("kiyomi/cache"));
+
+    if let Some(dir) = dirs::config_dir() {
+        println!("- config file: {:?}", dir.join("kiyomi.toml"));
     }
+    // we log all the filenames we've downloaded
+    if let Some(dir) = dirs::cache_dir() {
+        println!("- log file: {:?}", dir.join("kiyomi/cache"));
+    }
+
 
     let kiyomi_config = match config::get_config() {
         Ok(c) => c,
@@ -32,28 +38,38 @@ fn main() -> Result<()> {
         }
     }
 
+    let delete_automatically = kiyomi_config
+        .get("options")
+        .and_then(|o| o.get("delete"))
+        .and_then(|d| d.as_bool())
+        .unwrap_or(false);
+
     let watcher_config = notify::Config::default()
-        .with_poll_interval(std::time::Duration::from_secs(30))
-        .with_compare_contents(true);
+        .with_poll_interval(std::time::Duration::from_secs(1));
 
     let mut watcher = PollWatcher::new(tx, watcher_config)?;
 
+    let watch_dir = kiyomi_config
+        .get("directories")
+        .and_then(|d| d.get("manga"))
+        .and_then(|m| m.as_str())
+        .unwrap_or_else(|| {
+            eprintln!("! missing directories.manga in config");
+            std::process::exit(1);
+        });
+
     watcher.watch(Path::new(
-        kiyomi_config
-            .get("directories")
-            .and_then(|d| d.get("manga"))
-            .and_then(|m| m.as_str())
-            .unwrap(),
+        watch_dir,
     ), RecursiveMode::Recursive)?;
 
-    println!("{}\n", format!("- watching for changes in {:?}", std::env::current_dir()?));
+    println!("\n{}\n", format!("Watching for new manga.cbz in {:?}", watch_dir));
 
     for res in rx {
         match res {
             Ok(event) => {
                 match event.kind {
                     notify::event::EventKind::Create(_) => {
-                        created_files(event.paths);
+                        process_new_manga(event.paths, delete_automatically);
                     }
                     _ => (),
                 }
@@ -62,12 +78,11 @@ fn main() -> Result<()> {
         }
     }
 
-
     Ok(())
 }
 
 /// Files were created! Let's check if they're .cbz files. If they are, we'll process them.
-fn created_files(paths: Vec<std::path::PathBuf>) -> () {
+fn process_new_manga(paths: Vec<std::path::PathBuf>, delete_automatically: bool) -> () {
     for path in paths {
         if !path.is_file() {
             continue;
@@ -78,16 +93,28 @@ fn created_files(paths: Vec<std::path::PathBuf>) -> () {
         let filename = match path.to_str() {
             Some(f) => f,
             None => {
+                eprintln!("! couldn't get filename");
                 continue;
             }
         };
 
-        if let Some(_) = log_filename(filename) {
-            println!("+ created {:?}", path);
-            if let Err(e) = manga(filename) {
-                eprintln!("manga error: {:?}", e);
+        let _ = log_filename(filename);
+
+        println!("+ found new file: {:?}", filename);
+        if let Err(e) = manga(filename) {
+            eprintln!("manga error: {:?}", e);
+            return;
+        }
+
+        // delete if desired
+        if delete_automatically {
+            match std::fs::remove_file(&path) {
+                Ok(_) => println!("- deleted file: {:?}", filename),
+                Err(e) => eprintln!("! couldn't delete file: {:?}", e),
             }
         }
+
+        println!();
     }
 }
 
@@ -114,7 +141,8 @@ fn manga(file_path: &str) -> Result<()> {
     };
 
     println!("+ reading cbz file: {:?}", file_path);
-    std::thread::sleep(std::time::Duration::from_secs(1)); // await fs writes
+
+    wait_until_stable_size(Path::new(file_path), 30)?;
 
     let kiyomi_config = match config::get_config() {
         Ok(c) => c,
@@ -146,23 +174,80 @@ fn manga(file_path: &str) -> Result<()> {
     }
 
     let manga = convert::extract_images_from_cbz(file_path)?;
-    match convert::build_epub_from_images(manga, fallback_title, &output_path) {
-        Ok(_) => {
-            match email::send_epubs_via_email(
-                kiyomi_config["smtp"]["server"].as_str().unwrap(),
-                kiyomi_config["smtp"]["username"].as_str().unwrap(),
-                kiyomi_config["smtp"]["password"].as_str().unwrap(),
-                kiyomi_config["smtp"]["from_email"].as_str().unwrap(),
-                kiyomi_config["smtp"]["to_email"].as_str().unwrap(),
-                kiyomi_config["smtp"]["subject"].as_str().unwrap(),
-                &output_path,
-            ) {
-                Ok(_) => println!("+ email sent successfully!"),
-                Err(e) => eprintln!("email error: {:?}", e),
+
+    // kiyomi sends email, which has a size limit. We need to stay below 20MB by splitting the manga
+    // and bulding multiple epubs
+
+    let cover_image = manga.0.first();
+
+
+    // let user choose size to slip over
+    // 25MB is the default size for email attachments
+    let size_limit = match kiyomi_config
+        .get("options")
+        .and_then(|o| o.get("size_limit"))
+        .and_then(|s| s.as_integer()) {
+        Some(s) => {
+            println!("- using size limit of {}MB", s);
+            if s < 1 {
+                eprintln!("! size limit must be greater than 0");
+                return Ok(());
             }
-        },
-        Err(e) => eprintln!("epub error: {:?}", e),
+            s as usize * 1024 * 1024
+        }
+        None => {
+            25 * 1024 * 1024
+        }
+    };
+
+    let mut current_size = 0;
+    let mut files = Vec::new();
+    let mut current_epub = Vec::new();
+    for image in manga.0.iter() {
+        current_size += image.contents.len();
+        if current_size > size_limit {
+            files.push(current_epub);
+            current_epub = Vec::new();
+            current_size = image.contents.len();
+        }
+        current_epub.push(image);
     }
+    if !current_epub.is_empty() {
+        files.push(current_epub);
+    }
+    if files.len() > 1 {
+        println!("- manga will be split into {} parts due to size constraints", files.len());
+    }
+
+    for (i, file) in files.iter().enumerate() {
+        println!("- processing part {} of {}", i + 1, files.len());
+        // now we have a vector of epubs. Let's build them
+        match convert::build_epub_from_images(
+            (file, manga.1.clone()),
+            cover_image,
+            &format!("{} - part {}", fallback_title, i + 1),
+            &output_path,
+            if files.len() > 1 { Some((i, files.len())) } else { None },
+        ) {
+            Ok(path) => {
+                match email::send_epub(
+                    kiyomi_config["smtp"]["port"].as_integer(),
+                    kiyomi_config["smtp"]["server"].as_str().unwrap(),
+                    kiyomi_config["smtp"]["username"].as_str().unwrap(),
+                    kiyomi_config["smtp"]["password"].as_str().unwrap(),
+                    kiyomi_config["smtp"]["from_email"].as_str().unwrap(),
+                    kiyomi_config["smtp"]["to_email"].as_str().unwrap(),
+                    &format!("{}-{} {}", i, files.len(), kiyomi_config["smtp"]["subject"].as_str().unwrap()),
+                    &path,
+                ) {
+                    Ok(_) => println!("- email sent successfully!"),
+                    Err(e) => eprintln!("email error: {:?}", e),
+                }
+            }
+            Err(e) => eprintln!("epub error: {:?}", e),
+        }
+    }
+
     Ok(())
 }
 
@@ -194,4 +279,33 @@ fn log_filename(filename: &str) -> Option<()> {
     }
 
     Some(())
+}
+
+fn wait_until_stable_size(path: &Path, timeout_secs: u64) -> std::io::Result<()> {
+    use std::{fs, thread, time::Duration};
+
+    let mut last_size = 0;
+    let mut stable_count = 0;
+
+    for _ in 0..timeout_secs {
+        let metadata = fs::metadata(path)?;
+        let size = metadata.len();
+
+        if size == last_size {
+            stable_count += 1;
+        } else {
+            stable_count = 0;
+            last_size = size;
+        }
+
+        if stable_count >= 2 {
+            return Ok(());
+        }
+
+        thread::sleep(Duration::from_secs(1));
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::TimedOut, "Couldn't stabilize",
+    ))
 }
