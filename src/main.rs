@@ -77,7 +77,7 @@ fn main() -> Result<()> {
             Err(e) => println!("watch error: {:?}", e),
         }
     }
-    
+
     Ok(())
 }
 
@@ -97,7 +97,7 @@ fn process_new_manga(paths: Vec<std::path::PathBuf>, delete_automatically: bool)
                 continue;
             }
         };
-        
+
         let _ = log_filename(filename);
 
         println!("+ found new file: {:?}", filename);
@@ -141,7 +141,8 @@ fn manga(file_path: &str) -> Result<()> {
     };
 
     println!("+ reading cbz file: {:?}", file_path);
-    std::thread::sleep(std::time::Duration::from_secs(1)); // await fs writes
+
+    wait_until_stable_size(Path::new(file_path), 30)?;
 
     let kiyomi_config = match config::get_config() {
         Ok(c) => c,
@@ -198,7 +199,7 @@ fn manga(file_path: &str) -> Result<()> {
             25 * 1024 * 1024
         }
     };
-    
+
     let mut current_size = 0;
     let mut files = Vec::new();
     let mut current_epub = Vec::new();
@@ -277,4 +278,33 @@ fn log_filename(filename: &str) -> Option<()> {
     }
 
     Some(())
+}
+
+fn wait_until_stable_size(path: &Path, timeout_secs: u64) -> std::io::Result<()> {
+    use std::{fs, thread, time::Duration};
+
+    let mut last_size = 0;
+    let mut stable_count = 0;
+
+    for _ in 0..timeout_secs {
+        let metadata = fs::metadata(path)?;
+        let size = metadata.len();
+
+        if size == last_size {
+            stable_count += 1;
+        } else {
+            stable_count = 0;
+            last_size = size;
+        }
+
+        if stable_count >= 2 {
+            return Ok(());
+        }
+
+        thread::sleep(Duration::from_secs(1));
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::TimedOut, "Couldn't stabilize",
+    ))
 }
