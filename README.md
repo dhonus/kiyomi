@@ -50,8 +50,33 @@ size_limit = 25
 
 ## Notes
 - There are no resend checks on purpose. If the send fails, you will get an email from amazon. Delete and download a manga again to resend.
-- Kiyomi will not delete the .cbz files after sending them. You can delete them manually or configure suwayomi to delete them after downloading.
 - Manga that exists in the manga directory before kiyomi starts will not be sent. Only those that are downloaded while kiyomi is running will be sent.
 
 ## Showcase
 [showcase.webm](https://github.com/user-attachments/assets/cf52818d-f6e3-490d-925d-6b2fb9afa4e8)
+
+## Systemd service example
+Create a file at `/etc/systemd/system/kiyomi.service` with the following content
+```ini
+[Unit]
+Description=Kiyomi
+After=network.target
+
+[Service]
+ExecStart=/home/YOUR_USERNAME/kiyomi/target/release/kiyomi
+WorkingDirectory=/home/YOUR_USERNAME/kiyomi
+Restart=always
+RestartSec=5
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=HOME=/home/YOUR_USERNAME
+
+[Install]
+WantedBy=multi-user.target
+```
+Then enable and start the service
+```bash
+sudo systemctl enable kiyomi
+sudo systemctl start kiyomi
+```

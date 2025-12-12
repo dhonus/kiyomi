@@ -156,7 +156,7 @@ fn manga(file_path: &str) -> Result<()> {
         .get("directories")
         .and_then(|d| d.get("manga"))
         .and_then(|o| o.as_str())
-        .expect("??? missing directories.output");
+        .expect("??? missing directories.manga");
 
     let output_path = format!("{}/kiyomi_output", output);
 
