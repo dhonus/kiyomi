@@ -1,18 +1,115 @@
 extern crate dirs;
 
-// Get the config file. If it doesn't exist, create a default one
-pub fn get_config() -> Result<toml::Value, Box<dyn std::error::Error>> {
+use std::error::Error;
+use std::path::Path;
 
-    let config_dir = match dirs::config_dir() {
-        Some(dir) => dir,
-        None => {
-            return Err("! the config directory could not be created".into());
+pub struct Settings {
+    pub smtp_server: String,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub smtp_from: String,
+    pub smtp_to: String,
+    pub smtp_subject: String,
+    pub smtp_port: Option<i64>,
+
+    pub manga_dir: String,
+
+    pub delete: bool,
+    // let user choose size to slip over
+    // 25MB is the default size for email attachments
+    pub size_limit_mb: usize,
+}
+
+impl Settings {
+    pub fn from_env() -> Option<Self> {
+        let smtp_server = std::env::var("KIYOMI_SMTP_SERVER").ok()?;
+        let smtp_username = std::env::var("KIYOMI_SMTP_USERNAME").ok()?;
+        let smtp_password = std::env::var("KIYOMI_SMTP_PASSWORD").ok()?;
+        let smtp_from = std::env::var("KIYOMI_SMTP_FROM").ok()?;
+        let smtp_to = std::env::var("KIYOMI_SMTP_TO").ok()?;
+
+        let manga_dir = std::env::var("KIYOMI_MANGA_DIR").ok()?;
+
+        let smtp_subject =
+            std::env::var("KIYOMI_SMTP_SUBJECT").unwrap_or_else(|_| "Manga".to_string());
+
+        let smtp_port = std::env::var("KIYOMI_SMTP_PORT").ok().and_then(|v| v.parse().ok());
+
+        let delete = std::env::var("KIYOMI_DELETE").map(|v| v == "true").unwrap_or(false);
+
+        let size_limit_mb =
+            std::env::var("KIYOMI_SIZE_LIMIT").ok().and_then(|v| v.parse().ok()).unwrap_or(25);
+
+        Some(Self {
+            smtp_server,
+            smtp_username,
+            smtp_password,
+            smtp_from,
+            smtp_to,
+            smtp_subject,
+            smtp_port,
+            manga_dir,
+            delete,
+            size_limit_mb,
+        })
+    }
+
+    pub fn from_config_file(path: &Path) -> Result<Self, Box<dyn Error>> {
+        let config_str = std::fs::read_to_string(path)?;
+        let config: toml::Value = toml::from_str(&config_str)?;
+
+        let get_str = |section: &str, key: &str| -> Result<String, Box<dyn Error>> {
+            config
+                .get(section)
+                .and_then(|s| s.get(key))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .ok_or_else(|| format!("missing {}.{}", section, key).into())
+        };
+
+        let get_int_optional = |section: &str, key: &str| -> Option<i64> {
+            config.get(section).and_then(|s| s.get(key)).and_then(|v| v.as_integer())
+        };
+
+        let get_bool_optional = |section: &str, key: &str| -> Option<bool> {
+            config.get(section).and_then(|s| s.get(key)).and_then(|v| v.as_bool())
+        };
+
+        Ok(Self {
+            smtp_server: get_str("smtp", "server")?,
+            smtp_username: get_str("smtp", "username")?,
+            smtp_password: get_str("smtp", "password")?,
+            smtp_from: get_str("smtp", "from_email")?,
+            smtp_to: get_str("smtp", "to_email")?,
+            smtp_subject: get_str("smtp", "subject")?,
+
+            smtp_port: get_int_optional("smtp", "port"),
+
+            manga_dir: get_str("directories", "manga")?,
+
+            delete: get_bool_optional("options", "delete").unwrap_or(false),
+
+            size_limit_mb: get_int_optional("options", "size_limit").unwrap_or(25) as usize,
+        })
+    }
+
+    pub fn load() -> Result<Self, Box<dyn Error>> {
+        if let Some(settings) = Self::from_env() {
+            println!("- using environment configuration");
+            return Ok(settings);
         }
-    };
 
-    let config_path = config_dir.join("kiyomi.toml");
+        let config_path = crate::paths::config_file()?;
 
-    if !config_path.exists() {
+        if config_path.exists() {
+            println!("- using config file {:?}", config_path);
+            return Self::from_config_file(&config_path);
+        }
+
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         let default_config = r#"[smtp]
 server = "smtp.example.com"
 username = ""
@@ -20,91 +117,18 @@ password = ""
 from_email = ""
 to_email = ""
 subject = "Manga"
+
 [directories]
-# manga = "/path/to/your/manga"
+# manga = "/path/to/manga"
+
 [options]
 delete = false
-        "#;
+"#;
 
-        match std::fs::write(&config_path, default_config) {
-            Ok(_) => println!("- created default config file at {:?}", config_path),
-            Err(e) => eprintln!("! couldn't create config file: {}", e),
-        }
+        std::fs::write(&config_path, default_config)?;
 
-        return Err(format!("! please edit the config file at {:?}", config_path).into());
+        println!("- created default config at {:?}", config_path);
+
+        Err(format!("please edit config at {:?}", config_path).into())
     }
-
-    let config_str = std::fs::read_to_string(&config_path)?;
-    let config: toml::Value = toml::from_str(&config_str)?;
-
-    Ok(config)
-}
-
-pub fn validate_config(config: &toml::Value) -> Result<(), Box<dyn std::error::Error>> {
-    let smtp = config.get("smtp").ok_or("missing [smtp] section")?;
-    let directories = config.get("directories").ok_or("missing [directories] section")?;
-
-    let server = smtp.get("server").ok_or("missing smtp.server")?;
-    let username = smtp.get("username").ok_or("missing smtp.username")?;
-    let password = smtp.get("password").ok_or("missing smtp.password")?;
-    let from_email = smtp.get("from_email").ok_or("missing smtp.from_email")?;
-    let to_email = smtp.get("to_email").ok_or("missing smtp.to_email")?;
-    let subject = smtp.get("subject").ok_or("missing smtp.subject")?;
-
-    let manga = directories.get("manga").ok_or("missing directories.manga")?;
-
-    if server.as_str().is_none() {
-        return Err("smtp.server must be a string".into());
-    }
-
-    if username.as_str().is_none() {
-        return Err("smtp.username must be a string".into());
-    }
-
-    if password.as_str().is_none() {
-        return Err("smtp.password must be a string".into());
-    }
-
-    if from_email.as_str().is_none() {
-        return Err("smtp.from_email must be a string".into());
-    }
-
-    if to_email.as_str().is_none() {
-        return Err("smtp.to_email must be a string".into());
-    }
-
-    if subject.as_str().is_none() {
-        return Err("smtp.subject must be a string".into());
-    }
-
-    if manga.as_str().is_none() {
-        return Err("directories.manga must be a string".into());
-    }
-
-    if !std::path::Path::new(manga.as_str().unwrap()).exists() {
-        return Err("directories.manga path does not exist".into());
-    }
-
-    // check length
-    if username.as_str().unwrap().len() == 0 {
-        return Err("smtp.username must not be empty".into());
-    }
-
-    if password.as_str().unwrap().len() == 0 {
-        return Err("smtp.password must not be empty".into());
-    }
-
-    if from_email.as_str().unwrap().len() == 0 {
-        return Err("smtp.from_email must not be empty".into());
-    }
-
-    if to_email.as_str().unwrap().len() == 0 {
-        return Err("smtp.to_email must not be empty".into());
-    }
-
-    if subject.as_str().unwrap().len() == 0 {
-        return Err("smtp.subject must not be empty".into());
-    }
-
-    Ok(())
 }

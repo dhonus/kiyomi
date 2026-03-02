@@ -7,7 +7,7 @@ use std::fs;
 
 /// Sends an EPUB file as an email attachment.
 pub fn send_epub(
-    port: Option<i64>, // optional port, default is 587 for TLS
+    port: &Option<i64>, // optional port, default is 587 for TLS
     smtp_server: &str,
     smtp_username: &str,
     smtp_password: &str,
@@ -16,13 +16,9 @@ pub fn send_epub(
     subject: &str,
     epub_path: &str, // all the epubs are in this directory
 ) -> Result<(), Box<dyn Error>> {
-
     // get the file
     let epub_bytes = fs::read(epub_path)?;
-    let epub_filename = epub_path
-        .rsplit('/')
-        .next()
-        .unwrap_or("attachment.epub"); // fallback name
+    let epub_filename = epub_path.rsplit('/').next().unwrap_or("attachment.epub"); // fallback name
 
     // build the email message
     // "multipart/mixed" content type allows us to include attachments
@@ -35,12 +31,12 @@ pub fn send_epub(
                 .singlepart(
                     SinglePart::builder()
                         .header(header::ContentType::TEXT_PLAIN)
-                        .body(String::from("Here's your manga!"))
+                        .body(String::from("Here's your manga!")),
                 )
                 .singlepart(
                     Attachment::new(String::from(epub_filename))
-                        .body(epub_bytes, "application/epub+zip".parse()?)
-                )
+                        .body(epub_bytes, "application/epub+zip".parse()?),
+                ),
         )?;
 
     // create the smtp transporter
@@ -49,23 +45,12 @@ pub fn send_epub(
     let creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
 
     let mailer = match port {
-        Some(p) => {
-            SmtpTransport::relay(smtp_server)?
-                .port(p as u16)
-                .credentials(creds)
-                .build()
-        }
-        None => {
-            SmtpTransport::relay(smtp_server)?
-                .credentials(creds)
-                .build()
-        }
+        Some(p) => SmtpTransport::relay(smtp_server)?.port(*p as u16).credentials(creds).build(),
+        None => SmtpTransport::relay(smtp_server)?.credentials(creds).build(),
     };
 
     match mailer.send(&email) {
-        Ok(_) => {
-            Ok(())
-        }
+        Ok(_) => Ok(()),
         Err(e) => {
             eprintln!("Could not send email: {:?}", e);
             Err(Box::new(e))

@@ -1,11 +1,11 @@
+use epub_builder::{EpubBuilder, EpubContent, EpubVersion, ZipLibrary};
+use infer;
 use std::{
     fs::File,
     io::{self, BufReader, Read},
     path::Path,
 };
-use epub_builder::{EpubBuilder, EpubContent, EpubVersion, ZipLibrary};
 use zip::ZipArchive;
-use infer;
 
 pub struct ImageFile {
     pub file_name: String, // original file name from the ZIP
@@ -21,7 +21,9 @@ pub struct ComicInfo {
     pub series: Option<String>,
 }
 
-pub fn extract_images_from_cbz<P: AsRef<Path>>(cbz_path: P) -> io::Result<(Vec<ImageFile>, Option<ComicInfo>)> {
+pub fn extract_images_from_cbz<P: AsRef<Path>>(
+    cbz_path: P,
+) -> io::Result<(Vec<ImageFile>, Option<ComicInfo>)> {
     println!("- extracting images from cbz");
     let file = File::open(cbz_path)?;
     let mut comic_info = None;
@@ -56,11 +58,7 @@ pub fn extract_images_from_cbz<P: AsRef<Path>>(cbz_path: P) -> io::Result<(Vec<I
             continue;
         }
 
-        image_files.push(ImageFile {
-            file_name: name,
-            contents,
-            mime_type,
-        });
+        image_files.push(ImageFile { file_name: name, contents, mime_type });
     }
 
     image_files.sort_by(|a, b| a.file_name.cmp(&b.file_name));
@@ -75,18 +73,23 @@ pub fn build_epub_from_images(
     output_path: &str,
     file_of: Option<(usize, usize)>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-
     let (images, comic_info) = manga;
 
     let mut epub = EpubBuilder::new(ZipLibrary::new()?)?;
     epub.epub_version(EpubVersion::V30);
-    
+
     // the first image is always the cover
     if let Some(cover_image) = cover_image {
-        epub.add_cover_image(&cover_image.file_name, &cover_image.contents[..], &cover_image.mime_type)?;
+        epub.add_cover_image(
+            &cover_image.file_name,
+            &cover_image.contents[..],
+            &cover_image.mime_type,
+        )?;
     }
 
-    let mut title = String::from(comic_info.as_ref().and_then(|ci| ci.title.as_deref()).unwrap_or(fallback_title));
+    let mut title = String::from(
+        comic_info.as_ref().and_then(|ci| ci.title.as_deref()).unwrap_or(fallback_title),
+    );
     if let Some(series) = comic_info.as_ref().and_then(|ci| ci.series.as_deref()) {
         title = format!("{} - {}", title, series);
     }
@@ -94,7 +97,10 @@ pub fn build_epub_from_images(
         title = format!("{}-{} {}", file_n + 1, of, title);
     }
     epub.metadata("title", &title)?;
-    epub.metadata("author", comic_info.as_ref().and_then(|ci| ci.writer.as_deref()).unwrap_or("Unknown"))?;
+    epub.metadata(
+        "author",
+        comic_info.as_ref().and_then(|ci| ci.writer.as_deref()).unwrap_or("Unknown"),
+    )?;
 
     // output file! In the future there may be more than 1. We need to be under 50MB
     let output_path = format!("{}/{}.epub", output_path, title);
@@ -104,7 +110,8 @@ pub fn build_epub_from_images(
         let image_path = format!("images/{}", image_file.file_name);
 
         // 2) Create a simple XHTML page referencing that image
-        let chapter_xhtml = format!("
+        let chapter_xhtml = format!(
+            "
         <!DOCTYPE html>
             <html xmlns='http://www.w3.org/1999/xhtml' xml:lang='en' lang='en'>
             <head>
@@ -117,21 +124,22 @@ pub fn build_epub_from_images(
                 </div>
             </body>
             </html>
-            ", i + 1
+            ",
+            i + 1
         );
 
         if i == 0 {
             epub.add_content(
                 EpubContent::new(format!("s{}.xhtml", i + 1), chapter_xhtml.as_bytes())
                     .title("Cover")
-                    .reftype(epub_builder::ReferenceType::Cover)
+                    .reftype(epub_builder::ReferenceType::Cover),
             )?;
             continue;
         }
 
         epub.add_content(
             EpubContent::new(format!("s{}.xhtml", i + 1), chapter_xhtml.as_bytes())
-                .title(format!("Page {}", i + 1))
+                .title(format!("Page {}", i + 1)),
         )?;
     }
 
@@ -156,36 +164,28 @@ pub fn parse_comicinfo(xml_bytes: &[u8]) -> ComicInfo {
     let mut buf = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
-            Ok(quick_xml::events::Event::Start(ref e)) => {
-                match e.name().as_ref() {
-                    b"Series" => {
-                        match reader.read_text(e.name()) {
-                            Ok(t) => {
-                                comic_info.series = Some(t.to_string());
-                            }
-                            _ => {}
-                        }
-                    }
-                    b"Title" => {
-                        match reader.read_text(e.name()) {
-                            Ok(t) => {
-                                comic_info.title = Some(t.to_string());
-                            }
-                            _ => {}
-                        }
-                    }
-                    b"Writer" => {
-                        match reader.read_text(e.name()) {
-                            Ok(t) => {
-                                comic_info.writer = Some(t.to_string());
-                                println!("Writer: {:?}", t);
-                            }
-                            _ => {}
-                        }
+            Ok(quick_xml::events::Event::Start(ref e)) => match e.name().as_ref() {
+                b"Series" => match reader.read_text(e.name()) {
+                    Ok(t) => {
+                        comic_info.series = Some(t.to_string());
                     }
                     _ => {}
-                }
-            }
+                },
+                b"Title" => match reader.read_text(e.name()) {
+                    Ok(t) => {
+                        comic_info.title = Some(t.to_string());
+                    }
+                    _ => {}
+                },
+                b"Writer" => match reader.read_text(e.name()) {
+                    Ok(t) => {
+                        comic_info.writer = Some(t.to_string());
+                        println!("Writer: {:?}", t);
+                    }
+                    _ => {}
+                },
+                _ => {}
+            },
             Ok(quick_xml::events::Event::Eof) => break,
             Err(e) => {
                 eprintln!("! couldn't parse ComicInfo.xml: {:?} Basic metadata will be used", e);

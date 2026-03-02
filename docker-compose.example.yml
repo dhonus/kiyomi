@@ -1,0 +1,28 @@
+services:
+  kiyomi:
+    build: .
+    container_name: kiyomi
+    restart: unless-stopped
+    environment:
+      # SMTP
+      KIYOMI_SMTP_SERVER: smtp.gmail.com
+      KIYOMI_SMTP_USERNAME: example@gmail.com
+      KIYOMI_SMTP_PASSWORD: "your email password"
+      KIYOMI_SMTP_FROM: example@gmail.com
+      KIYOMI_SMTP_TO: mykindle_5umstuff@kindle.com
+      #      KIYOMI_SMTP_SUBJECT: Manga
+
+      # manga directory **inside container**
+      KIYOMI_MANGA_DIR: /manga
+
+      # delete manga after sending email, and size limit in MB (0 for no limit)
+      KIYOMI_DELETE: "true"
+      KIYOMI_SIZE_LIMIT: "25"
+
+      # cache location inside container
+      KIYOMI_CACHE: /cache
+
+    volumes:
+      # host path -> container path
+      - /home/daniel/manga:/manga
+      - ./cache:/cache
