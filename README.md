@@ -16,13 +16,13 @@ When you download manga using suwayomi, kiyomi automatically sends it to your ki
 ## How to use
 
 ### Docker (recommended)
-Copy `docker-compose.yml`, fill in your SMTP details as environment variables, then:
+Copy `docker-compose.example.yml` to `docker-compose.yml`, fill in your SMTP details and manga directory, then:
 
 ```bash
 docker compose up -d --build
 ```
 
-Kiyomi watches `./manga` (mounted to `/manga` in the container) for new `.cbz` files, and keeps its "already sent" state in `./cache`. No config file is needed - everything is set via environment variables. See [Environment variables](#environment-variables) below for the full list.
+Kiyomi watches the directory mounted to `/manga` in the container for new `.cbz` files, and keeps its "already sent" state in the directory mounted to `/cache`. No config file is needed - everything is set via environment variables. See [Environment variables](#environment-variables) below for the full list.
 
 To follow the logs:
 ```bash
