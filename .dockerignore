@@ -1,0 +1,8 @@
+target
+cache
+manga
+.git
+.idea
+*.md
+docker-compose.yml
+Dockerfile

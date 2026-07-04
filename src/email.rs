@@ -7,7 +7,7 @@ use std::fs;
 
 /// Sends an EPUB file as an email attachment.
 pub fn send_epub(
-    port: Option<i64>, // optional port, default is 587 for TLS
+    port: Option<u16>, // optional port, default is 587 for TLS
     smtp_server: &str,
     smtp_username: &str,
     smtp_password: &str,
@@ -51,7 +51,7 @@ pub fn send_epub(
     let mailer = match port {
         Some(p) => {
             SmtpTransport::relay(smtp_server)?
-                .port(p as u16)
+                .port(p)
                 .credentials(creds)
                 .build()
         }
@@ -67,7 +67,7 @@ pub fn send_epub(
             Ok(())
         }
         Err(e) => {
-            eprintln!("Could not send email: {:?}", e);
+            log::error!("could not send email: {:?}", e);
             Err(Box::new(e))
         }
     }

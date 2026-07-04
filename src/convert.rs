@@ -22,13 +22,13 @@ pub struct ComicInfo {
 }
 
 pub fn extract_images_from_cbz<P: AsRef<Path>>(cbz_path: P) -> io::Result<(Vec<ImageFile>, Option<ComicInfo>)> {
-    println!("- extracting images from cbz");
+    log::debug!("extracting images from cbz");
     let file = File::open(cbz_path)?;
     let mut comic_info = None;
 
-    println!("- reading cbz file");
+    log::debug!("reading cbz file");
     let mut archive = ZipArchive::new(BufReader::new(file))?;
-    println!("- cbz file opened");
+    log::debug!("cbz file opened");
 
     let mut image_files = Vec::new();
 
@@ -47,7 +47,7 @@ pub fn extract_images_from_cbz<P: AsRef<Path>>(cbz_path: P) -> io::Result<(Vec<I
         };
 
         if !mime_type.starts_with("image/") && entry.name() != "ComicInfo.xml" {
-            println!("! skipping non-image file: {}", name);
+            log::warn!("skipping non-image file: {}", name);
             continue;
         }
 
@@ -136,7 +136,7 @@ pub fn build_epub_from_images(
     }
 
     for (_, image_file) in images.iter().enumerate() {
-        println!("+ adding image: {}", image_file.file_name);
+        log::debug!("adding image: {}", image_file.file_name);
         let image_path = format!("images/{}", image_file.file_name);
         epub.add_resource(&image_path, &image_file.contents[..], &image_file.mime_type)?;
     }
@@ -144,7 +144,7 @@ pub fn build_epub_from_images(
     // Write out the EPUB
     epub.generate(&mut output)?;
 
-    println!("- epub created at {} with {} pages", output_path, images.len());
+    log::info!("epub created at {} with {} pages", output_path, images.len());
 
     Ok(output_path)
 }
@@ -178,7 +178,7 @@ pub fn parse_comicinfo(xml_bytes: &[u8]) -> ComicInfo {
                         match reader.read_text(e.name()) {
                             Ok(t) => {
                                 comic_info.writer = Some(t.to_string());
-                                println!("Writer: {:?}", t);
+                                log::debug!("writer: {:?}", t);
                             }
                             _ => {}
                         }
@@ -188,7 +188,7 @@ pub fn parse_comicinfo(xml_bytes: &[u8]) -> ComicInfo {
             }
             Ok(quick_xml::events::Event::Eof) => break,
             Err(e) => {
-                eprintln!("! couldn't parse ComicInfo.xml: {:?} Basic metadata will be used", e);
+                log::warn!("couldn't parse ComicInfo.xml: {:?} Basic metadata will be used", e);
                 break;
             }
             _ => {}
