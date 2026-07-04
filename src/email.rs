@@ -7,7 +7,7 @@ use std::fs;
 
 /// Sends an EPUB file as an email attachment.
 pub fn send_epub(
-    port: Option<i64>, // optional port, default is 587 for TLS
+    port: Option<u16>, // optional port, default is 587 for TLS
     smtp_server: &str,
     smtp_username: &str,
     smtp_password: &str,
@@ -44,30 +44,29 @@ pub fn send_epub(
         )?;
 
     // create the smtp transporter
-    //  - for gmail and other servers that require TLS port 587 is usually used
-    //  - for local/insecure servers adapt accordingly ?
+    //  - port 465 is implicit TLS (SMTPS): the connection is TLS from the start
+    //  - port 587 (the default, and what Gmail/most providers use) is STARTTLS: the
+    //    connection starts in plaintext and is upgraded, so it needs a different
+    //    builder or the TLS handshake fails with "wrong version number"
     let creds = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
 
-    let mailer = match port {
-        Some(p) => {
-            SmtpTransport::relay(smtp_server)?
-                .port(p as u16)
-                .credentials(creds)
-                .build()
-        }
-        None => {
-            SmtpTransport::relay(smtp_server)?
-                .credentials(creds)
-                .build()
-        }
+    let builder = if port == Some(465) {
+        SmtpTransport::relay(smtp_server)?
+    } else {
+        SmtpTransport::starttls_relay(smtp_server)?
     };
+    let builder = match port {
+        Some(p) => builder.port(p),
+        None => builder,
+    };
+    let mailer = builder.credentials(creds).build();
 
     match mailer.send(&email) {
         Ok(_) => {
             Ok(())
         }
         Err(e) => {
-            eprintln!("Could not send email: {:?}", e);
+            log::error!("could not send email: {:?}", e);
             Err(Box::new(e))
         }
     }
